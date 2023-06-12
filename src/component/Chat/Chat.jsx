@@ -4,6 +4,7 @@ import { CircularProgress, Container, Typography } from "@mui/material";
 import TextArea from "../TextArea/TextArea";
 import { adminPanelByAI } from "../../api/dbApi";
 import { Box } from "@mui/system";
+import { renderToString } from "react-dom/server";
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
@@ -27,7 +28,7 @@ const Chat = () => {
               justifyContent: "center",
             }}
           >
-            <CircularProgress sx={{color : "grey"}} />
+            <CircularProgress sx={{ color: "grey" }} />
           </Box>
         ),
       },
@@ -37,7 +38,43 @@ const Chat = () => {
     try {
       const response = await adminPanelByAI(message);
       const data = response.data;
-      const actual_response = "Answer   : " + data.success;
+
+      let actual_response;
+      if (Array.isArray(data)) {
+        actual_response = "Answer   : " + data.join(", ");
+      } else if (typeof data === "object") {
+        actual_response = "Answer   : ";
+
+        // Check if the data contains HTML tags
+        let hasHTML = false;
+        for (const key in data) {
+          if (typeof data[key] === "string" && data[key].includes("<")) {
+            hasHTML = true;
+            break;
+          }
+        }
+
+        if (hasHTML) {
+          actual_response = (
+            <div>
+              {actual_response}
+              {Object.entries(data).map(([key, value]) => (
+                <div key={key}>
+                  <strong>{key}:</strong>
+                  <div dangerouslySetInnerHTML={{ __html: value }} />
+                </div>
+              ))}
+            </div>
+          );
+        } else {
+          for (const key in data) {
+            actual_response += `${key}: ${data[key]}, `;
+          }
+          actual_response = actual_response.slice(0, -2); // Remove the trailing comma and space
+        }
+      } else {
+        actual_response = "Answer   : " + data;
+      }
 
       setTimeout(() => {
         setMessages((prevMessages) => {
@@ -86,7 +123,6 @@ const Chat = () => {
   };
 
   useEffect(() => {
-    // Scroll to the bottom of the message container
     if (messageContainerRef.current) {
       messageContainerRef.current.scrollTop =
         messageContainerRef.current.scrollHeight;
@@ -114,7 +150,7 @@ const Chat = () => {
       >
         <Container
           ref={messageContainerRef}
-          sx={{ height: "80%", overflow: "auto" , marginTop : "2%"}}
+          sx={{ height: "80%", overflow: "auto", marginTop: "2%" }}
         >
           <TransitionGroup>
             {messages.map((message, index) => (
@@ -125,19 +161,23 @@ const Chat = () => {
               >
                 {message.content ? (
                   <div>
-                    {index > 0 && index % 2 === 0 && <div style={{ height: 16 }}></div>} {/* Add a gap between each pair of messages */}
+                    {index > 0 && index % 2 === 0 && (
+                      <div style={{ height: 16 }}></div>
+                    )}
                     <Typography
                       variant="body1"
                       className="message"
                       sx={{
-                        backgroundColor: index % 2 !== 0 ? "#dadada" : "#fff", // Set background color based on index
+                        backgroundColor: index % 2 !== 0 ? "#dadada" : "#fff",
                         fontStyle: index % 2 !== 0 ? "italic" : "normal",
                         padding: "8px",
                         borderRadius: "4px",
                         marginBottom: "8px",
                       }}
                     >
-                      {message.content}
+                      {typeof message.content === "object"
+                        ? renderToString(message.content)
+                        : message.content}
                     </Typography>
                   </div>
                 ) : (
